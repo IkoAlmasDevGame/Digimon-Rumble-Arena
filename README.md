@@ -1,2 +1,2 @@
 # Digimon-Rumble-Arena
-Digimon Rumbke
+Digimon Rumble Arena
