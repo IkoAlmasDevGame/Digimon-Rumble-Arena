@@ -1,0 +1,848 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Digimon Rumble Arena - Web Edition</title>
+    <link rel="icon" href="icon/1785304404799.png" type="image/png" />
+    
+    <!-- Fonts: Plus Jakarta Sans -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+    
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- Konfigurasi Tailwind -->
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: { sans: ['"Plus Jakarta Sans"', 'sans-serif'] }
+                }
+            }
+        }
+    </script>
+    
+    <!-- Custom CSS -->
+    <style>
+        :root {
+            --primary: #4F46E5;
+            --secondary: #ec4899;
+            --dark: #0f172a;
+        }
+
+        body {
+            font-family: 'Plus Jakarta Sans', sans-serif;
+            background-color: #000;
+            overflow: hidden; 
+            overscroll-behavior-y: none; /* Cegah pull-to-refresh di HP */
+            touch-action: manipulation; /* Optimasi tap di mobile */
+            -webkit-tap-highlight-color: transparent;
+        }
+
+        /* Responsive Screen Fixes */
+        .screen {
+            display: none;
+            width: 100vw;
+            height: 100dvh; /* dvh sangat penting untuk Mobile Browser */
+            position: absolute;
+            top: 0; left: 0;
+        }
+        .screen.active { display: flex; }
+
+        #screen-battle { 
+            background-image: url('assets/arena_stages.jpg'); 
+            background-size: cover;
+            background-position: center bottom; /* Agar pijakan tanah pas */
+        }
+
+        /* Glassmorphism Panel */
+        .glass-panel {
+            background: rgba(15, 23, 42, 0.65);
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+            border: 1px solid rgba(255, 255, 255, 0.15);
+            box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
+        }
+
+        /* Depth Effect Buttons - Proportions adjusted */
+        .btn-depth {
+            position: relative;
+            background: linear-gradient(135deg, var(--primary), #3730a3);
+            color: white;
+            border: none;
+            border-radius: 12px;
+            padding: 14px 20px;
+            font-weight: 800;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            cursor: pointer;
+            transition: all 0.15s cubic-bezier(0.4, 0, 0.2, 1);
+            box-shadow: 0 6px 0 #312e81, 0 8px 15px rgba(0,0,0,0.4);
+            transform: translateY(0);
+            text-shadow: 1px 1px 2px rgba(0,0,0,0.3);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            text-align: center;
+        }
+        @media (min-width: 640px) { .btn-depth { padding: 16px 32px; } } /* Normal size on tablet+ */
+
+        .btn-depth:active {
+            transform: translateY(6px) !important;
+            box-shadow: 0 0px 0 #312e81, 0 2px 5px rgba(0,0,0,0.4) !important;
+        }
+
+        .btn-depth.secondary {
+            background: linear-gradient(135deg, var(--secondary), #be185d);
+            box-shadow: 0 6px 0 #831843, 0 8px 15px rgba(0,0,0,0.4);
+        }
+        .btn-depth.secondary:active { box-shadow: 0 0px 0 #831843, 0 2px 5px rgba(0,0,0,0.4) !important; }
+
+        .btn-depth.danger {
+            background: linear-gradient(135deg, #ef4444, #b91c1c);
+            box-shadow: 0 6px 0 #7f1d1d, 0 8px 15px rgba(0,0,0,0.4);
+        }
+        .btn-depth.danger:active { box-shadow: 0 0px 0 #7f1d1d, 0 2px 5px rgba(0,0,0,0.4) !important; }
+
+        .btn-toggle {
+            background: rgba(255, 255, 255, 0.05);
+            border: 2px solid rgba(255, 255, 255, 0.1);
+            color: #94a3b8;
+            border-radius: 8px;
+            padding: 10px 8px;
+            font-weight: 700;
+            font-size: 0.85rem;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+        @media (min-width: 640px) { .btn-toggle { padding: 12px 16px; font-size: 1rem; border-radius: 10px; } }
+        
+        .btn-toggle:hover { background: rgba(255, 255, 255, 0.1); color: white; }
+        .btn-toggle.active {
+            background: linear-gradient(135deg, var(--primary), #3730a3);
+            border-color: #818cf8;
+            color: white;
+            box-shadow: 0 4px 15px rgba(79, 70, 229, 0.4);
+            transform: scale(1.03);
+        }
+
+        /* Character Card */
+        .char-card {
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            filter: grayscale(70%);
+            border: 2px solid transparent;
+        }
+        .char-card:hover, .char-card.selected {
+            transform: scale(1.05) translateY(-3px);
+            filter: grayscale(0%);
+            border-color: var(--primary);
+            box-shadow: 0 8px 20px rgba(79, 70, 229, 0.4);
+            background: rgba(30, 41, 59, 0.9);
+        }
+
+        /* Animations */
+        @keyframes float { 0%, 100% { transform: translateY(0px); } 50% { transform: translateY(-6px); } }
+        .floating { animation: float 3s ease-in-out infinite; }
+        @keyframes shake {
+            0%, 100% { transform: translate(0, 0) rotate(0deg); }
+            20% { transform: translate(-3px, 1px) rotate(-2deg); }
+            40% { transform: translate(3px, -1px) rotate(2deg); }
+            60% { transform: translate(-2px, 2px) rotate(-1deg); }
+            80% { transform: translate(2px, -2px) rotate(1deg); }
+        }
+        .shake-effect { animation: shake 0.4s; filter: brightness(1.8) sepia(1) hue-rotate(-50deg) saturate(5); }
+        @keyframes popIn { 0% { transform: scale(0.8); opacity: 0; } 100% { transform: scale(1); opacity: 1; } }
+        .pop-in { animation: popIn 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards; }
+        @keyframes flashText { 0%, 100% { opacity: 1; color: white; } 50% { opacity: 0.8; color: #ef4444; transform: scale(1.1); } }
+        .timer-warning { animation: flashText 1s infinite; }
+
+        .action-effect {
+            position: absolute;
+            pointer-events: none;
+            font-size: 2.5rem;
+            font-weight: 900;
+            color: white;
+            text-shadow: 0 0 10px red, 0 0 20px yellow;
+            animation: actionFlash 0.5s ease-out forwards;
+            z-index: 50;
+        }
+        @media (min-width: 640px) { .action-effect { font-size: 4rem; } }
+        @keyframes actionFlash { 0% { opacity: 0; transform: scale(0.5); } 50% { opacity: 1; transform: scale(1.2); } 100% { opacity: 0; transform: scale(1.5); } }
+
+        /* Health Bar */
+        .health-bar-container {
+            width: 100%; height: 16px; /* Lebih proporsional di mobile */
+            background: rgba(0,0,0,0.6); border-radius: 8px; overflow: hidden;
+            border: 1.5px solid rgba(255,255,255,0.8);
+            box-shadow: inset 0 2px 4px rgba(0,0,0,0.8), 0 0 8px rgba(0,0,0,0.5);
+        }
+        @media (min-width: 640px) { .health-bar-container { height: 22px; border-radius: 11px; } }
+        
+        .health-bar-fill {
+            height: 100%; background: linear-gradient(90deg, #10b981, #34d399);
+            transition: width 0.2s ease-out, background-color 0.3s;
+        }
+        .health-bar-fill.low { background: linear-gradient(90deg, #ef4444, #f87171); }
+
+        /* Win Dots */
+        .win-dot {
+            width: 10px; height: 10px; border-radius: 50%;
+            background: rgba(255,255,255,0.2); border: 1.5px solid rgba(255,255,255,0.4);
+            transition: all 0.3s;
+        }
+        @media (min-width: 640px) { .win-dot { width: 14px; height: 14px; border-width: 2px; } }
+        .win-dot.won { background: #fbbf24; border-color: #f59e0b; box-shadow: 0 0 8px #fbbf24; }
+
+        /* Sprites - Responsive Heights */
+        .sprite {
+            height: 120px; /* HP Kecil */
+            object-fit: contain;
+            filter: drop-shadow(0 10px 10px rgba(0,0,0,0.5));
+            transition: transform 0.2s;
+        }
+        @media (min-width: 480px) { .sprite { height: 160px; } } /* HP Besar */
+        @media (min-width: 768px) { .sprite { height: 220px; filter: drop-shadow(0 15px 15px rgba(0,0,0,0.6)); } } /* Tablet */
+        @media (min-width: 1024px){ .sprite { height: 280px; } } /* Desktop */
+        
+        #player-sprite { transform: scaleX(1); }
+        #ai-sprite { transform: scaleX(-1); }
+
+        .cooldown-overlay {
+            position: absolute; top: 0; left: 0; right: 0; bottom: 0;
+            background: rgba(0,0,0,0.7); border-radius: 12px;
+            display: none; align-items: center; justify-content: center;
+        }
+        
+        /* Layout Wrappers */
+        .safe-area-px { padding-left: max(1rem, env(safe-area-inset-left)); padding-right: max(1rem, env(safe-area-inset-right)); }
+    </style>
+</head>
+<body class="text-white antialiased select-none font-sans bg-black w-screen h-[100dvh]">
+
+    <!-- AUDIO ELEMENT -->
+    <audio id="bgm" src="Brave_Heart.mp3" loop preload="auto"></audio>
+
+    <!-- FLOATING MUSIC BUTTON -->
+    <button onclick="toggleMusic(event)" class="fixed top-4 right-4 md:top-6 md:right-6 z-[100] bg-indigo-600/70 backdrop-blur-md p-2.5 md:p-3 rounded-full border border-indigo-400/50 shadow-lg hover:scale-110 transition-all duration-300">
+        <svg id="icon-sound-on" xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 md:h-6 md:w-6 text-white hidden" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M15.536 8.464a5 5 0 010 7.072M18.364 5.636a9 9 0 010 12.728M11 5L6 9H2v6h4l5 4V5z" />
+        </svg>
+        <svg id="icon-sound-off" xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 md:h-6 md:w-6 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h2.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15z" />
+            <path stroke-linecap="round" stroke-linejoin="round" d="M17 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2" />
+        </svg>
+    </button>
+
+    <!-- LOBBY SCREEN -->
+    <div id="screen-lobby" class="screen active flex-col items-center justify-center bg-gradient-to-br from-indigo-950 via-slate-900 to-black relative px-4">
+        <div class="absolute inset-0 overflow-hidden pointer-events-none z-0">
+            <div class="absolute top-1/4 left-1/4 w-48 h-48 md:w-72 md:h-72 bg-indigo-500 rounded-full mix-blend-multiply filter blur-3xl opacity-20 animate-pulse"></div>
+            <div class="absolute top-1/3 right-1/4 w-56 h-56 md:w-80 md:h-80 bg-pink-500 rounded-full mix-blend-multiply filter blur-3xl opacity-20 animate-pulse" style="animation-delay: 2s;"></div>
+        </div>
+
+        <div class="z-10 text-center glass-panel p-8 md:p-12 rounded-3xl w-full max-w-md relative pop-in">
+            <div id="click-prompt" class="absolute -top-8 left-1/2 transform -translate-x-1/2 text-[10px] md:text-xs text-indigo-300 animate-pulse w-full font-semibold tracking-wide">Klik di mana saja untuk memutar musik</div>
+            
+            <h1 class="text-4xl sm:text-5xl md:text-6xl font-black mb-1 md:mb-2 tracking-tight bg-clip-text text-transparent bg-gradient-to-r from-blue-400 to-pink-500 drop-shadow-md">DIGIMON</h1>
+            <h2 class="text-lg sm:text-xl md:text-2xl font-extrabold mb-8 md:mb-10 text-gray-300 tracking-widest uppercase">Rumble Arena</h2>
+            
+            <div class="flex flex-col gap-4 w-full">
+                <button class="btn-depth !text-sm md:!text-base" onclick="selectMode('versus')">Player vs AI</button>
+                <button class="btn-depth secondary !text-sm md:!text-base" onclick="selectMode('survival')">Survival Mode</button>
+                <button class="btn-depth !bg-slate-700 !shadow-slate-900 border border-slate-600 !text-sm md:!text-base text-gray-200" onclick="showHowToPlay()">Cara Bermain</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- HOW TO PLAY MODAL -->
+    <div id="modal-howto" class="fixed inset-0 z-50 hidden items-center justify-center bg-black/80 backdrop-blur-sm p-4">
+        <div class="glass-panel p-6 md:p-8 rounded-2xl w-full max-w-md relative pop-in">
+            <h3 class="text-2xl md:text-3xl font-bold mb-4 text-indigo-400 border-b border-gray-700 pb-2">Cara Bermain</h3>
+            <ul class="space-y-3 text-gray-300 text-xs md:text-sm leading-relaxed mb-6 font-medium">
+                <li><strong class="text-white font-bold">Player vs AI:</strong> Bertarung sesuai ronde & waktu yang ditentukan.</li>
+                <li><strong class="text-white font-bold">Survival Mode:</strong> Waktu tak terbatas! AI terus berganti saat kalah.</li>
+                <li><strong class="text-white font-bold">Attack (Serangan):</strong> Serangan dasar. Cooldown cepat.</li>
+                <li><strong class="text-white font-bold">Specialty (Spesial):</strong> Serangan elemen kuat. Cooldown lama.</li>
+            </ul>
+            <button class="btn-depth w-full !text-sm" onclick="closeHowToPlay()">Mengerti</button>
+        </div>
+    </div>
+
+    <!-- CHARACTER SELECTION SCREEN -->
+    <div id="screen-char-select" class="screen flex-col items-center justify-start bg-slate-900 pt-6 md:pt-10 px-4 overflow-y-auto w-full pb-24">
+        <div class="w-full max-w-5xl mx-auto flex flex-col items-center">
+            <h2 class="text-3xl md:text-4xl font-black mb-1 md:mb-2 text-center text-white drop-shadow-md">Pilih Jagoanmu</h2>
+            <p class="text-xs md:text-sm text-gray-400 mb-6 md:mb-8 font-semibold text-center">Tentukan karakter utama untuk bertarung</p>
+
+            <!-- Responsive Grid for Characters -->
+            <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3 md:gap-4 w-full" id="roster-grid">
+                <!-- Diisi lewat JS -->
+            </div>
+        </div>
+
+        <div class="fixed bottom-0 left-0 w-full p-4 bg-gradient-to-t from-black via-black/90 to-transparent flex justify-between items-center z-20 safe-area-px">
+            <button class="btn-depth !bg-gray-700 !shadow-gray-900 !px-6 !py-3 !text-xs sm:!text-sm" onclick="switchScreen('screen-lobby')">Kembali</button>
+            <button class="btn-depth !px-8 !py-3 !text-xs sm:!text-sm opacity-50 cursor-not-allowed" id="btn-confirm-char" onclick="confirmCharacter()">Lanjut</button>
+        </div>
+    </div>
+
+    <!-- MATCH SETTINGS SCREEN -->
+    <div id="screen-settings" class="screen flex-col items-center justify-center bg-slate-900 p-4">
+        <div class="glass-panel p-6 md:p-10 rounded-2xl md:rounded-3xl w-full max-w-xl pop-in">
+            <h2 class="text-2xl md:text-3xl font-black mb-6 md:mb-8 text-center border-b border-gray-600 pb-3 md:pb-4 text-white">Pengaturan Match</h2>
+            
+            <div class="space-y-6 md:space-y-8 w-full">
+                <div>
+                    <h3 class="text-xs md:text-sm font-bold text-indigo-300 mb-2 md:mb-3 uppercase tracking-wider">Kesulitan AI</h3>
+                    <div class="grid grid-cols-3 gap-2 md:gap-3">
+                        <button class="btn-toggle active" id="diff-easy" onclick="setSetting('difficulty', 'easy')">Easy</button>
+                        <button class="btn-toggle" id="diff-medium" onclick="setSetting('difficulty', 'medium')">Medium</button>
+                        <button class="btn-toggle" id="diff-hard" onclick="setSetting('difficulty', 'hard')">Hard</button>
+                    </div>
+                </div>
+
+                <div id="versus-settings" class="space-y-6 md:space-y-8">
+                    <div>
+                        <h3 class="text-xs md:text-sm font-bold text-indigo-300 mb-2 md:mb-3 uppercase tracking-wider">Batas Waktu</h3>
+                        <div class="grid grid-cols-3 gap-2 md:gap-3">
+                            <button class="btn-toggle active" id="time-60" onclick="setSetting('time', 60)">60s</button>
+                            <button class="btn-toggle" id="time-90" onclick="setSetting('time', 90)">90s</button>
+                            <button class="btn-toggle" id="time-0" onclick="setSetting('time', 0)">Bebas</button>
+                        </div>
+                    </div>
+
+                    <div>
+                        <h3 class="text-xs md:text-sm font-bold text-indigo-300 mb-2 md:mb-3 uppercase tracking-wider">Jumlah Ronde</h3>
+                        <div class="grid grid-cols-3 gap-2 md:gap-3">
+                            <button class="btn-toggle" id="round-1" onclick="setSetting('rounds', 1)">1 Rd</button>
+                            <button class="btn-toggle active" id="round-3" onclick="setSetting('rounds', 3)">BO3</button>
+                            <button class="btn-toggle" id="round-5" onclick="setSetting('rounds', 5)">BO5</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="mt-8 md:mt-10 flex flex-col gap-3">
+                <button class="btn-depth w-full !bg-green-600 !shadow-green-900 text-sm md:text-lg" onclick="initGame()">MULAI BERTARUNG</button>
+                <button class="text-gray-400 hover:text-white underline text-xs md:text-sm text-center font-bold py-2" onclick="switchScreen('screen-char-select')">Kembali Pilih Karakter</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- BATTLE SCREEN -->
+    <div id="screen-battle" class="screen flex-col justify-between relative shadow-[inset_0_0_100px_rgba(0,0,0,0.8)]">
+        <div class="absolute inset-0 bg-black/20 pointer-events-none z-0"></div>
+
+        <!-- Header / HUD - Max width container -->
+        <div class="w-full bg-gradient-to-b from-black/90 via-black/60 to-transparent z-10 pt-2 md:pt-4">
+            <div class="w-full max-w-6xl mx-auto flex justify-between items-start px-2 sm:px-6 md:px-8 pb-4">
+                
+                <!-- Player Stats -->
+                <div class="w-[38%] sm:w-[40%] flex flex-col gap-1.5 md:gap-2">
+                    <div class="flex items-center gap-2 md:gap-3">
+                        <img id="hud-player-img" src="" class="w-10 h-10 sm:w-12 sm:h-12 md:w-16 md:h-16 rounded-full border-2 border-indigo-400 bg-black/50 object-cover shadow-[0_0_10px_rgba(79,70,229,0.5)]">
+                        <div class="flex-1 min-w-0"> <!-- min-w-0 prevents flex blowout -->
+                            <h3 id="hud-player-name" class="font-black text-sm sm:text-base md:text-xl leading-tight text-white drop-shadow-md truncate">Player</h3>
+                            <span id="hud-player-type" class="text-[9px] sm:text-[10px] md:text-xs px-1.5 py-0.5 md:px-2 md:py-1 bg-indigo-600 rounded text-white font-bold shadow-inner mt-0.5 md:mt-1 inline-block truncate max-w-full">Type</span>
+                        </div>
+                    </div>
+                    <div class="health-bar-container relative">
+                        <div id="hp-player" class="health-bar-fill w-full"></div>
+                        <span id="hp-player-text" class="absolute inset-0 flex items-center justify-center text-[9px] md:text-xs font-black drop-shadow-[0_1px_2px_rgba(0,0,0,0.8)]">100/100</span>
+                    </div>
+                    <div id="player-win-dots" class="flex gap-1 md:gap-1.5 mt-0.5"></div>
+                </div>
+
+                <!-- VS / Timer Info -->
+                <div class="flex flex-col items-center justify-start w-[20%] mt-1 md:mt-2 relative z-20">
+                    <div id="battle-timer" class="text-3xl sm:text-4xl md:text-5xl font-black text-white drop-shadow-[0_4px_4px_rgba(0,0,0,1)] tracking-tighter">60</div>
+                    <div id="round-info" class="text-[9px] sm:text-[10px] md:text-sm font-extrabold bg-black/60 border border-gray-600 px-2 sm:px-4 py-0.5 sm:py-1 rounded-full mt-1 md:mt-2 uppercase tracking-widest text-gray-200 text-center whitespace-nowrap">R1</div>
+                </div>
+
+                <!-- AI Stats -->
+                <div class="w-[38%] sm:w-[40%] flex flex-col gap-1.5 md:gap-2 items-end text-right">
+                    <div class="flex items-center gap-2 md:gap-3 flex-row-reverse">
+                        <img id="hud-ai-img" src="" class="w-10 h-10 sm:w-12 sm:h-12 md:w-16 md:h-16 rounded-full border-2 border-red-500 bg-black/50 object-cover transform scale-x-[-1] shadow-[0_0_10px_rgba(239,68,68,0.5)]">
+                        <div class="flex-1 min-w-0">
+                            <h3 id="hud-ai-name" class="font-black text-sm sm:text-base md:text-xl leading-tight text-white drop-shadow-md truncate">AI</h3>
+                            <span id="hud-ai-type" class="text-[9px] sm:text-[10px] md:text-xs px-1.5 py-0.5 md:px-2 md:py-1 bg-red-600 rounded text-white font-bold shadow-inner mt-0.5 md:mt-1 inline-block truncate max-w-full">Type</span>
+                        </div>
+                    </div>
+                    <div class="health-bar-container relative">
+                        <div id="hp-ai" class="health-bar-fill w-full"></div>
+                        <span id="hp-ai-text" class="absolute inset-0 flex items-center justify-center text-[9px] md:text-xs font-black drop-shadow-[0_1px_2px_rgba(0,0,0,0.8)]">100/100</span>
+                    </div>
+                    <div id="ai-win-dots" class="flex gap-1 md:gap-1.5 mt-0.5 justify-end"></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Notification Banner -->
+        <div id="battle-notice" class="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 z-50 text-5xl sm:text-6xl md:text-8xl font-black italic uppercase text-center drop-shadow-[0_5px_10px_rgba(0,0,0,0.8)] text-white hidden w-full px-4 pointer-events-none">
+            FIGHT!
+        </div>
+
+        <!-- Arena (Characters) - Centered and Responsive -->
+        <div class="flex-1 w-full max-w-5xl mx-auto flex justify-between items-end pb-8 sm:pb-16 md:pb-24 px-4 sm:px-12 md:px-24 z-10 relative pointer-events-none" id="arena-stage">
+            <div class="relative pointer-events-auto">
+                <img id="player-sprite" src="" class="sprite floating">
+                <div id="player-damage-text" class="absolute -top-8 sm:-top-12 left-1/2 transform -translate-x-1/2 text-3xl sm:text-4xl font-black text-red-500 hidden z-20 drop-shadow-[0_2px_0_#fff]"></div>
+            </div>
+            
+            <div class="relative pointer-events-auto">
+                <img id="ai-sprite" src="" class="sprite floating">
+                <div id="ai-damage-text" class="absolute -top-8 sm:-top-12 left-1/2 transform -translate-x-1/2 text-3xl sm:text-4xl font-black text-red-500 hidden z-20 drop-shadow-[0_2px_0_#fff]"></div>
+            </div>
+        </div>
+
+        <!-- Controls - Fluid Width -->
+        <div class="w-full bg-gradient-to-t from-black via-black/80 to-transparent z-20 pb-6 pt-4 sm:pb-8 sm:pt-6 px-4 safe-area-px">
+            <div class="w-full max-w-3xl mx-auto flex justify-center gap-3 md:gap-6">
+                <!-- Flex-1 makes buttons fill available space evenly -->
+                <button class="btn-depth flex-1 max-w-[220px] !text-xs sm:!text-sm md:!text-lg !px-2 sm:!px-4 !py-4 md:!py-5 rounded-xl md:rounded-2xl" id="btn-attack" onclick="playerAction('attack')">
+                    ATTACK
+                    <div id="cd-attack" class="cooldown-overlay rounded-xl md:rounded-2xl"><span class="text-lg md:text-2xl font-black">...</span></div>
+                </button>
+                <button class="btn-depth secondary flex-1 max-w-[220px] !text-xs sm:!text-sm md:!text-lg !px-2 sm:!px-4 !py-4 md:!py-5 rounded-xl md:rounded-2xl" id="btn-special" onclick="playerAction('special')">
+                    SPECIALTY
+                    <div id="cd-special" class="cooldown-overlay rounded-xl md:rounded-2xl"><span class="text-lg md:text-2xl font-black" id="cd-text-special"></span></div>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- GAME OVER SCREEN -->
+    <div id="screen-game-over" class="screen flex-col items-center justify-center bg-black/90 backdrop-blur-lg z-50 px-4">
+        <div class="pop-in text-center w-full max-w-2xl">
+            <h1 id="result-title" class="text-5xl sm:text-6xl md:text-8xl font-black mb-3 md:mb-4 uppercase drop-shadow-[0_0_20px_rgba(255,255,255,0.3)] leading-tight">You Win!</h1>
+            <p id="result-desc" class="text-sm sm:text-lg md:text-xl text-gray-300 mb-8 md:mb-10 font-bold bg-gray-900/50 inline-block px-4 py-1.5 sm:px-6 sm:py-2 rounded-full border border-gray-700">Mode: Versus | Difficulty: Hard</p>
+            <br>
+            <button class="btn-depth !text-sm sm:!text-base !px-8 sm:!px-10 !py-3 sm:!py-4 mx-auto w-full max-w-[300px]" onclick="resetToLobby()">KEMBALI LOBBY</button>
+        </div>
+    </div>
+
+    <script>
+        // --- AUDIO / SOUNDTRACK LOGIC ---
+        const bgm = document.getElementById('bgm');
+        bgm.volume = 0.3; 
+        let isMusicPlaying = false;
+        let musicInteracted = false;
+
+        function toggleMusic(event) {
+            if(event) event.stopPropagation(); 
+            
+            const iconOn = document.getElementById('icon-sound-on');
+            const iconOff = document.getElementById('icon-sound-off');
+            const prompt = document.getElementById('click-prompt');
+
+            if (isMusicPlaying) {
+                bgm.pause();
+                isMusicPlaying = false;
+                iconOn.classList.add('hidden');
+                iconOff.classList.remove('hidden');
+            } else {
+                bgm.play().then(() => {
+                    isMusicPlaying = true;
+                    musicInteracted = true;
+                    iconOn.classList.remove('hidden');
+                    iconOff.classList.add('hidden');
+                    if(prompt) prompt.style.display = 'none';
+                }).catch(e => console.log("Audio play failed (Need User Interaction):", e));
+            }
+        }
+
+        document.body.addEventListener('click', () => {
+            if (!musicInteracted && !isMusicPlaying) toggleMusic(null);
+        }, { once: true });
+        
+        document.body.addEventListener('touchstart', () => {
+            if (!musicInteracted && !isMusicPlaying) toggleMusic(null);
+        }, { once: true, passive: true });
+
+        // --- GAME DATA ---
+        const charRoster = [
+            { id: 'agumon', name: 'Agumon', img: 'assets/Agumon0102.webp', hp: 120, atk: 15, spec: 'Baby Flame', specType: 'Reptile' },
+            { id: 'gabumon', name: 'Gabumon', img: 'assets/Gabumon_illo.webp', hp: 130, atk: 12, spec: 'Petit Fire', specType: 'Beast' },
+            { id: 'patamon', name: 'Patamon', img: 'assets/Patamon_b.webp', hp: 90, atk: 10, spec: 'Air Shot', specType: 'Mammal' },
+            { id: 'tailmon', name: 'Tailmon', img: 'assets/Tailmon.webp', hp: 110, atk: 18, spec: 'Neko Punch', specType: 'Holy Beast' },
+            { id: 'vmon', name: 'V-mon', img: 'assets/V-mon.webp', hp: 125, atk: 16, spec: 'V-mon Head', specType: 'Dragon' },
+            { id: 'wormmon', name: 'Wormmon', img: 'assets/Wormmon.webp', hp: 100, atk: 11, spec: 'Nebaneba Net', specType: 'Insect' },
+            { id: 'guilmon', name: 'Guilmon', img: 'assets/Guilmon.webp', hp: 135, atk: 17, spec: 'Fireball', specType: 'Virus' },
+            { id: 'terriermon', name: 'Terriermon', img: 'assets/Terriermon.webp', hp: 105, atk: 13, spec: 'Blazing Fire', specType: 'Beast' },
+            { id: 'renamon', name: 'Renamon', img: 'assets/Renamon.webp', hp: 115, atk: 20, spec: 'Koyousetsu', specType: 'Spirit' }
+        ];
+
+        // --- GAME STATE & CONFIG ---
+        let config = { difficulty: 'easy', time: 60, rounds: 3 };
+
+        let gameState = {
+            mode: '', playerChar: null, aiChar: null,
+            playerHp: 0, playerMaxHp: 0, aiHp: 0, aiMaxHp: 0,
+            currentRound: 1, playerWins: 0, aiWins: 0, timeLeft: 0,
+            aiLoopId: null, timerId: null, isGameActive: false, isActionLocked: false
+        };
+
+        // --- UTILS ---
+        function switchScreen(screenId) {
+            document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+            document.getElementById(screenId).classList.add('active');
+        }
+
+        async function showNotice(text, colorClass = 'text-white', duration = 1500) {
+            return new Promise(resolve => {
+                const notice = document.getElementById('battle-notice');
+                notice.innerText = text;
+                notice.className = `absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 z-50 text-5xl sm:text-6xl md:text-8xl font-black italic uppercase text-center drop-shadow-[0_5px_10px_rgba(0,0,0,0.8)] pop-in w-full px-4 pointer-events-none ${colorClass}`;
+                notice.classList.remove('hidden');
+                setTimeout(() => { notice.classList.add('hidden'); resolve(); }, duration);
+            });
+        }
+
+        // --- LOBBY & HOW TO PLAY ---
+        function selectMode(mode) {
+            gameState.mode = mode;
+            renderCharSelect();
+            switchScreen('screen-char-select');
+        }
+        function showHowToPlay() { document.getElementById('modal-howto').classList.remove('hidden'); document.getElementById('modal-howto').classList.add('flex'); }
+        function closeHowToPlay() { document.getElementById('modal-howto').classList.add('hidden'); document.getElementById('modal-howto').classList.remove('flex'); }
+
+        // --- CHAR SELECT ---
+        function renderCharSelect() {
+            const grid = document.getElementById('roster-grid');
+            grid.innerHTML = '';
+            charRoster.forEach(char => {
+                const card = document.createElement('div');
+                card.className = 'char-card glass-panel rounded-xl sm:rounded-2xl p-3 sm:p-4 cursor-pointer flex flex-col items-center text-center h-full';
+                card.onclick = () => selectCharacter(char, card);
+                card.innerHTML = `
+                    <div class="h-16 w-16 sm:h-20 sm:w-20 md:h-24 md:w-24 mb-2 sm:mb-3 flex items-center justify-center flex-shrink-0">
+                        <img src="${char.img}" alt="${char.name}" class="max-h-full max-w-full object-contain drop-shadow-[0_3px_5px_rgba(0,0,0,0.5)]">
+                    </div>
+                    <h3 class="font-black text-sm sm:text-base md:text-lg truncate w-full">${char.name}</h3>
+                    <span class="text-[9px] sm:text-[10px] bg-indigo-900/80 border border-indigo-500/50 px-1.5 py-0.5 sm:px-2 sm:py-1 rounded font-bold mt-1 uppercase whitespace-nowrap overflow-hidden text-ellipsis w-auto max-w-full">${char.specType}</span>
+                `;
+                grid.appendChild(card);
+            });
+            gameState.playerChar = null;
+            const btn = document.getElementById('btn-confirm-char');
+            btn.classList.add('opacity-50', 'cursor-not-allowed');
+            btn.disabled = true;
+        }
+
+        function selectCharacter(char, cardElement) {
+            document.querySelectorAll('.char-card').forEach(c => c.classList.remove('selected', 'border-primary-500', 'bg-slate-800'));
+            cardElement.classList.add('selected');
+            gameState.playerChar = char;
+            const btn = document.getElementById('btn-confirm-char');
+            btn.classList.remove('opacity-50', 'cursor-not-allowed');
+            btn.disabled = false;
+        }
+
+        function confirmCharacter() {
+            if(!gameState.playerChar) return;
+            setupSettingsScreen();
+            switchScreen('screen-settings');
+        }
+
+        // --- SETTINGS LOGIC ---
+        function setupSettingsScreen() {
+            const vsSettings = document.getElementById('versus-settings');
+            if (gameState.mode === 'survival') vsSettings.style.display = 'none';
+            else vsSettings.style.display = 'block';
+            config = { difficulty: 'easy', time: 60, rounds: 3 };
+            updateSettingsUI();
+        }
+
+        function setSetting(type, value) {
+            config[type] = value;
+            updateSettingsUI();
+        }
+
+        function updateSettingsUI() {
+            const types = ['difficulty', 'time', 'rounds'];
+            types.forEach(type => {
+                document.querySelectorAll(`[id^="${type === 'difficulty' ? 'diff' : type}-"]`).forEach(el => el.classList.remove('active'));
+                const activeId = type === 'difficulty' ? `diff-${config[type]}` : `${type}-${config[type]}`;
+                const activeEl = document.getElementById(activeId);
+                if(activeEl) activeEl.classList.add('active');
+            });
+        }
+
+        // --- MATCH INITIALIZATION ---
+        function initGame() {
+            gameState.currentRound = 1; gameState.playerWins = 0; gameState.aiWins = 0;
+            gameState.playerMaxHp = gameState.playerChar.hp * (config.difficulty === 'hard' ? 0.8 : 1);
+
+            document.getElementById('hud-player-img').src = gameState.playerChar.img;
+            document.getElementById('hud-player-name').innerText = gameState.playerChar.name;
+            document.getElementById('hud-player-type').innerText = gameState.playerChar.spec;
+            document.getElementById('player-sprite').src = gameState.playerChar.img;
+            
+            // Re-render button html properly
+            const btnSpec = document.getElementById('btn-special');
+            btnSpec.innerHTML = `
+                SPECIALTY
+                <div id="cd-special" class="cooldown-overlay rounded-xl md:rounded-2xl"><span class="text-lg md:text-2xl font-black" id="cd-text-special"></span></div>
+            `;
+
+            setupWinDots();
+            switchScreen('screen-battle');
+            startRoundSequence();
+        }
+
+        function setupWinDots() {
+            const pDots = document.getElementById('player-win-dots');
+            const aDots = document.getElementById('ai-win-dots');
+            pDots.innerHTML = ''; aDots.innerHTML = '';
+            
+            if (gameState.mode === 'survival') return;
+
+            const requiredWins = Math.ceil(config.rounds / 2);
+            for(let i=0; i<requiredWins; i++) {
+                pDots.innerHTML += `<div class="win-dot" id="p-dot-${i}"></div>`;
+                aDots.innerHTML += `<div class="win-dot" id="a-dot-${i}"></div>`;
+            }
+        }
+
+        function updateWinDotsUI() {
+            if (gameState.mode === 'survival') return;
+            for(let i=0; i<gameState.playerWins; i++) {
+                const dot = document.getElementById(`p-dot-${i}`);
+                if(dot) dot.classList.add('won');
+            }
+            for(let i=0; i<gameState.aiWins; i++) {
+                const dot = document.getElementById(`a-dot-${i}`);
+                if(dot) dot.classList.add('won');
+            }
+        }
+
+        // --- ROUND LOGIC ---
+        async function startRoundSequence() {
+            gameState.isActionLocked = true; gameState.isGameActive = false;
+
+            if (gameState.mode === 'versus' || gameState.currentRound === 1) gameState.playerHp = gameState.playerMaxHp;
+            else if (gameState.mode === 'survival') gameState.playerHp = Math.min(gameState.playerMaxHp, gameState.playerHp + (gameState.playerMaxHp * 0.25));
+
+            spawnAI();
+            updateHpUI();
+            
+            const timerEl = document.getElementById('battle-timer');
+            timerEl.classList.remove('timer-warning');
+            if (gameState.mode === 'survival' || config.time === 0) {
+                gameState.timeLeft = -1; timerEl.innerText = '∞'; 
+            } else {
+                gameState.timeLeft = config.time; timerEl.innerText = gameState.timeLeft; 
+            }
+            
+            document.getElementById('round-info').innerText = gameState.mode === 'survival' ? `STG ${gameState.currentRound}` : `RND ${gameState.currentRound}`;
+
+            document.getElementById('player-sprite').style.opacity = '1'; document.getElementById('ai-sprite').style.opacity = '1';
+            
+            await showNotice(`ROUND ${gameState.currentRound}`, 'text-yellow-400');
+            await showNotice('FIGHT!', 'text-red-500', 1000);
+            
+            gameState.isActionLocked = false; gameState.isGameActive = true;
+            
+            if (gameState.timeLeft > 0) gameState.timerId = setInterval(updateTimer, 1000);
+            startAILoop();
+        }
+
+        function updateTimer() {
+            if(!gameState.isGameActive) return;
+            
+            gameState.timeLeft--;
+            const timerEl = document.getElementById('battle-timer');
+            timerEl.innerText = gameState.timeLeft;
+
+            if(gameState.timeLeft <= 10) timerEl.classList.add('timer-warning');
+            if(gameState.timeLeft <= 0) { clearInterval(gameState.timerId); handleRoundEnd(true); }
+        }
+
+        function spawnAI() {
+            let available = charRoster.filter(c => c.id !== gameState.playerChar.id);
+            if(gameState.mode === 'survival' && gameState.aiChar) available = available.filter(c => c.id !== gameState.aiChar.id); 
+            gameState.aiChar = available[Math.floor(Math.random() * available.length)];
+            
+            let diffMult = config.difficulty === 'easy' ? 0.8 : (config.difficulty === 'medium' ? 1 : 1.3);
+            if(gameState.mode === 'survival') diffMult += (gameState.currentRound * 0.1);
+
+            gameState.aiMaxHp = Math.floor(gameState.aiChar.hp * diffMult); gameState.aiHp = gameState.aiMaxHp;
+
+            document.getElementById('hud-ai-img').src = gameState.aiChar.img;
+            document.getElementById('hud-ai-name').innerText = gameState.aiChar.name;
+            document.getElementById('hud-ai-type').innerText = gameState.aiChar.specType;
+            document.getElementById('ai-sprite').src = gameState.aiChar.img;
+            document.getElementById('ai-sprite').classList.remove('shake-effect');
+        }
+
+        function updateHpUI() {
+            const pPct = Math.max(0, (gameState.playerHp / gameState.playerMaxHp) * 100);
+            const pBar = document.getElementById('hp-player');
+            pBar.style.width = `${pPct}%`; pBar.classList.toggle('low', pPct < 30);
+            document.getElementById('hp-player-text').innerText = `${Math.floor(gameState.playerHp)}/${Math.floor(gameState.playerMaxHp)}`;
+
+            const aPct = Math.max(0, (gameState.aiHp / gameState.aiMaxHp) * 100);
+            const aBar = document.getElementById('hp-ai');
+            aBar.style.width = `${aPct}%`; aBar.classList.toggle('low', aPct < 30);
+            document.getElementById('hp-ai-text').innerText = `${Math.floor(gameState.aiHp)}/${Math.floor(gameState.aiMaxHp)}`;
+        }
+
+        // --- COMBAT ACTIONS ---
+        function playerAction(type) {
+            if(!gameState.isGameActive || gameState.isActionLocked) return;
+            const btn = document.getElementById(`btn-${type}`);
+            if(btn.disabled) return;
+
+            let baseDmg = gameState.playerChar.atk;
+            let cooldown = type === 'attack' ? 1000 : 5000;
+            if (type === 'special') baseDmg *= 2.5;
+
+            const pSprite = document.getElementById('player-sprite');
+            // Responsive translate based on screen width
+            const moveX = window.innerWidth < 640 ? '20px' : '40px'; 
+            pSprite.style.transform = `scaleX(1) translateX(${moveX})`;
+            setTimeout(() => pSprite.style.transform = 'scaleX(1)', 200);
+
+            applyDamage('ai', baseDmg, type === 'special');
+            setCooldown(type, cooldown);
+        }
+
+        function setCooldown(type, ms) {
+            const btn = document.getElementById(`btn-${type}`);
+            const overlay = document.getElementById(`cd-${type}`);
+            const text = document.getElementById(type === 'special' ? 'cd-text-special' : null);
+            
+            btn.disabled = true; overlay.style.display = 'flex';
+            
+            let timeLeft = ms / 1000;
+            if(text) text.innerText = Math.ceil(timeLeft);
+
+            const interval = setInterval(() => {
+                timeLeft -= 0.1;
+                if(text) text.innerText = Math.ceil(timeLeft);
+                if(timeLeft <= 0 || !gameState.isGameActive) {
+                    clearInterval(interval); btn.disabled = false; overlay.style.display = 'none';
+                }
+            }, 100);
+        }
+
+        function startAILoop() {
+            if(!gameState.isGameActive) return;
+            
+            let speed = config.difficulty === 'easy' ? 3500 : (config.difficulty === 'hard' ? 1500 : 2500);
+            speed += (Math.random() * 800 - 400); 
+
+            gameState.aiLoopId = setTimeout(() => {
+                if(!gameState.isGameActive) return;
+                const aSprite = document.getElementById('ai-sprite');
+                const moveX = window.innerWidth < 640 ? '-20px' : '-40px';
+                aSprite.style.transform = `scaleX(-1) translateX(${moveX})`;
+                setTimeout(() => aSprite.style.transform = 'scaleX(-1)', 200);
+
+                const isSpecial = Math.random() < (config.difficulty === 'hard' ? 0.3 : 0.15);
+                let dmg = gameState.aiChar.atk; if(isSpecial) dmg *= 2.5;
+                applyDamage('player', dmg, isSpecial); startAILoop();
+            }, speed);
+        }
+
+        function applyDamage(target, baseDmg, isSpecial) {
+            const variance = baseDmg * 0.2;
+            let finalDmg = Math.floor(baseDmg - variance + (Math.random() * variance * 2));
+            
+            if(target === 'ai') {
+                gameState.aiHp = Math.max(0, gameState.aiHp - finalDmg);
+                showHitEffect('ai-sprite', 'ai-damage-text', finalDmg, isSpecial);
+            } else {
+                let diffMult = config.difficulty === 'easy' ? 0.7 : (config.difficulty === 'hard' ? 1.4 : 1);
+                finalDmg = Math.floor(finalDmg * diffMult);
+                gameState.playerHp = Math.max(0, gameState.playerHp - finalDmg);
+                showHitEffect('player-sprite', 'player-damage-text', finalDmg, isSpecial);
+            }
+            updateHpUI(); checkKnockout();
+        }
+
+        function showHitEffect(spriteId, textId, damage, isSpecial) {
+            const sprite = document.getElementById(spriteId);
+            const text = document.getElementById(textId);
+            
+            sprite.classList.remove('shake-effect'); void sprite.offsetWidth; sprite.classList.add('shake-effect');
+
+            if(isSpecial) {
+                const effect = document.createElement('div');
+                effect.className = 'action-effect'; effect.innerText = '💥';
+                effect.style.left = sprite.offsetLeft + (sprite.offsetWidth/2) + 'px';
+                effect.style.top = sprite.offsetTop + (sprite.offsetHeight/2) + 'px';
+                document.getElementById('arena-stage').appendChild(effect);
+                setTimeout(() => effect.remove(), 500);
+            }
+
+            text.innerText = `-${damage}`; text.style.display = 'block'; text.style.animation = 'float 1s ease-out forwards';
+            setTimeout(() => { text.style.display = 'none'; text.style.animation = ''; }, 1000);
+        }
+
+        function checkKnockout() {
+            if(gameState.aiHp <= 0 || gameState.playerHp <= 0) handleRoundEnd(false);
+        }
+
+        async function handleRoundEnd(isTimeOut) {
+            gameState.isGameActive = false; gameState.isActionLocked = true;
+            clearInterval(gameState.timerId); clearTimeout(gameState.aiLoopId);
+            let roundWinner = null;
+            
+            if (isTimeOut) {
+                const pPct = gameState.playerHp / gameState.playerMaxHp; const aPct = gameState.aiHp / gameState.aiMaxHp;
+                if (pPct > aPct) roundWinner = 'player'; else if (aPct > pPct) roundWinner = 'ai'; else roundWinner = 'draw'; 
+                await showNotice('TIME UP!', 'text-yellow-400');
+            } else {
+                if (gameState.aiHp <= 0) {
+                    roundWinner = 'player'; document.getElementById('ai-sprite').style.opacity = '0.3';
+                    await showNotice('K.O!', 'text-red-500');
+                } else if (gameState.playerHp <= 0) {
+                    roundWinner = 'ai'; document.getElementById('player-sprite').style.opacity = '0.3';
+                    await showNotice('K.O!', 'text-red-500');
+                }
+            }
+
+            if (gameState.mode === 'survival') {
+                if (roundWinner === 'player' || roundWinner === 'draw') {
+                    gameState.currentRound++; setTimeout(() => startRoundSequence(), 1000);
+                } else endMatch(false);
+            } else {
+                if (roundWinner === 'player') gameState.playerWins++; else if (roundWinner === 'ai') gameState.aiWins++;
+                updateWinDotsUI();
+                const requiredWins = Math.ceil(config.rounds / 2);
+                
+                if (gameState.playerWins >= requiredWins) endMatch(true);
+                else if (gameState.aiWins >= requiredWins) endMatch(false);
+                else { gameState.currentRound++; setTimeout(() => startRoundSequence(), 1500); }
+            }
+        }
+
+        function endMatch(playerWon) {
+            const title = document.getElementById('result-title'); const desc = document.getElementById('result-desc');
+            if(playerWon) {
+                title.innerText = 'YOU WIN!';
+                title.className = 'text-5xl sm:text-6xl md:text-8xl font-black mb-3 md:mb-4 uppercase drop-shadow-[0_0_30px_rgba(74,222,128,0.5)] text-transparent bg-clip-text bg-gradient-to-r from-green-400 to-blue-500 leading-tight';
+                desc.innerText = `Mode: Versus | ${config.rounds} Ronde | Diff: ${config.difficulty.toUpperCase()}`;
+            } else {
+                title.innerText = 'YOU LOSE!';
+                title.className = 'text-5xl sm:text-6xl md:text-8xl font-black mb-3 md:mb-4 uppercase text-red-500 drop-shadow-[0_0_30px_rgba(239,68,68,0.5)] leading-tight';
+                if(gameState.mode === 'survival') desc.innerText = `Kamu bertahan hingga Stage ${gameState.currentRound}`;
+                else desc.innerText = `Dikalahkan oleh AI di Mode Versus. Coba lagi!`;
+            }
+            setTimeout(() => switchScreen('screen-game-over'), 1000);
+        }
+
+        function resetToLobby() {
+            clearInterval(gameState.timerId); clearTimeout(gameState.aiLoopId);
+            document.getElementById('btn-attack').disabled = false; document.getElementById('btn-special').disabled = false;
+            document.getElementById('cd-attack').style.display = 'none'; document.getElementById('cd-special').style.display = 'none';
+            switchScreen('screen-lobby');
+        }
+    </script>
+</body>
+</html>
